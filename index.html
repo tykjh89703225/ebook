@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>等待桃樹花開</title>
+    <!-- 引入 StPageFlip 3D 翻頁套件 -->
+    <script src="https://cdn.jsdelivr.net/npm/page-flip/dist/js/page-flip.browser.js"></script> 
+    <style> 
+      * { box-sizing: border-box; } 
+      
+      body { 
+        background-color: #202124; 
+        background-size: cover;          
+        background-position: center;     
+        background-repeat: no-repeat;    
+        background-attachment: fixed;    
+        margin: 0; 
+        padding: 0; 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: center; 
+        align-items: center; 
+        min-height: 100vh; 
+        overflow: hidden; 
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+        transition: background-image 0.5s ease; 
+        user-select: none;
+      } 
+        
+      #loading { 
+        color: #ffffff; 
+        font-size: 18px; 
+        font-weight: 500; 
+        text-align: center;
+        padding: 15px 30px;
+        background: rgba(0, 0, 0, 0.75);
+        border-radius: 30px;
+        backdrop-filter: blur(5px);
+      } 
+ 
+      /* 滿版檢視區塊 */
+      .flipbook-viewport { 
+        position: relative; 
+        width: 100%; 
+        max-width: 1400px; 
+        height: 90vh; 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        overflow: hidden;
+        /* 觸控縮放由下方 JavaScript 接管，避免瀏覽器手勢與電子書手勢衝突 */
+        touch-action: none;
+        overscroll-behavior: contain;
+      } 
+ 
+      /* 支援動態縮放與位移的容器 */
+      #zoom-wrapper {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transform-origin: center center;
+        transition: transform 0.1s ease-out;
+        cursor: grab;
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      #zoom-wrapper:active {
+        cursor: grabbing;
+      }
+
+      #book-container { display: none; } 
+ 
+      .page {
+        background-color: #ffffff;
+        box-shadow: 0 0 25px rgba(0,0,0,0.45);
+        overflow: hidden;
+      }
+
+      .page-img { 
+        width: 100%; 
+        height: 100%; 
+        object-fit: cover; 
+        object-position: center; 
+        display: block;
+      } 
+ 
+      /* 控制按鈕列 */ 
+      .controls { 
+        position: absolute; 
+        bottom: 15px; 
+        display: flex; 
+        align-items: center; 
+        gap: 10px; 
+        z-index: 100; 
+        background: rgba(20, 20, 20, 0.88); 
+        padding: 8px 20px; 
+        border-radius: 40px; 
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(10px); 
+      } 
+ 
+      .btn { 
+        background-color: #3c4043; 
+        color: #ffffff; 
+        border: 1px solid rgba(255,255,255,0.2); 
+        padding: 7px 14px; 
+        font-size: 13px; 
+        font-weight: 500; 
+        border-radius: 20px; 
+        cursor: pointer; 
+        transition: all 0.2s ease; 
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      } 
+ 
+      .btn:hover { 
+        background-color: #1a73e8; 
+        border-color: #1a73e8;
+      } 
+
+      .divider {
+        width: 1px;
+        height: 18px;
+        background: rgba(255,255,255,0.2);
+        margin: 0 4px;
+      }
+ 
+      .page-info { 
+        color: #e8eaed; 
+        font-size: 14px; 
+        min-width: 80px; 
+        text-align: center; 
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+      } 
+
+      .page-input {
+        width: 48px;
+        background-color: rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 10px;
+        padding: 3px 4px;
+        font-size: 13px;
+        font-weight: 500;
+        text-align: center;
+        outline: none;
+        user-select: text;
+        -webkit-user-select: text;
+      }
+
+      .page-input:focus {
+        border-color: #1a73e8;
+        background-color: rgba(255, 255, 255, 0.22);
+      }
+
+      .page-input::-webkit-inner-spin-button,
+      .page-input::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      .page-input[type=number] {
+        -moz-appearance: textfield;
+      }
+
+      /* 手機和平板：控制列縮小，避免遮住過多書頁 */
+      @media (max-width: 767px) {
+        .controls {
+          width: calc(100vw - 16px);
+          max-width: 560px;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 5px;
+          padding: 6px 8px;
+          bottom: 8px;
+          border-radius: 16px;
+        }
+        .btn {
+          padding: 6px 8px;
+          font-size: 12px;
+          min-height: 32px;
+        }
+        .divider {
+          display: none;
+        }
+        .page-info {
+          min-width: 64px;
+          font-size: 12px;
+        }
+        .page-input {
+          width: 40px;
+          font-size: 12px;
+          padding: 2px 3px;
+        }
+      }
+
+      /* 窄螢幕手機：上排翻頁，下排縮放與音效，按鈕更精簡 */
+      @media (max-width: 480px) {
+        .controls {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          grid-template-areas:
+            "prev page page next"
+            "zin zout reset sound";
+          gap: 5px;
+          width: calc(100vw - 20px);
+          max-width: 380px;
+          padding: 6px 8px;
+          bottom: max(8px, env(safe-area-inset-bottom));
+          border-radius: 14px;
+        }
+        .btn {
+          min-width: 0;
+          min-height: 30px;
+          padding: 5px 4px;
+          font-size: 11px;
+          line-height: 1.1;
+          white-space: nowrap;
+          border-radius: 12px;
+        }
+        #prev-btn { grid-area: prev; }
+        #page-info {
+          grid-area: page;
+          min-width: 0;
+          font-size: 11px;
+        }
+        .page-input {
+          width: 36px;
+          font-size: 11px;
+          padding: 2px 2px;
+        }
+        #next-btn { grid-area: next; }
+        #zoom-in-btn { grid-area: zin; }
+        #zoom-out-btn { grid-area: zout; }
+        #zoom-reset-btn { grid-area: reset; }
+        #sound-toggle-btn { grid-area: sound; }
+      }
+
+      /* 手機／平板橫向：依螢幕高度縮小控制列，不受 viewport 寬度影響 */
+      @media (orientation: landscape) and (max-height: 800px) and (pointer: coarse) {
+        /* 橫向手機／平板：為底部控制列預留高度，書頁不會頂到上下邊界 */
+        body {
+          height: 100vh;
+          height: 100dvh;
+          min-height: 0;
+          justify-content: flex-start;
+        }
+        .flipbook-viewport {
+          height: calc(100vh - 48px);
+          height: calc(100dvh - 48px);
+          max-height: calc(100dvh - 48px);
+          flex: 0 0 auto;
+        }
+        .controls {
+          display: grid !important;
+          grid-template-columns: repeat(7, max-content);
+          width: max-content;
+          max-width: calc(100vw - 16px);
+          left: 50%;
+          transform: translateX(-50%);
+          flex-wrap: nowrap;
+          justify-content: center;
+          gap: 4px;
+          padding: 4px 7px;
+          bottom: max(4px, env(safe-area-inset-bottom));
+          border-radius: 12px;
+        }
+        .btn {
+          min-width: 0;
+          min-height: 26px;
+          padding: 4px 6px;
+          font-size: 10px;
+          line-height: 1;
+          white-space: nowrap;
+          border-radius: 9px;
+        }
+        .divider { display: none; }
+        .page-info {
+          min-width: 52px;
+          font-size: 10px;
+        }
+        .page-input {
+          width: 32px;
+          font-size: 10px;
+          padding: 1px 2px;
+        }
+        #prev-btn, #page-info, #next-btn,
+        #zoom-in-btn, #zoom-out-btn, #zoom-reset-btn, #sound-toggle-btn {
+          grid-area: auto;
+        }
+      }
+    </style> 
+  </head> 
+  <body> 
+
+    <div id="loading">正在載入《等待桃樹花開》...</div> 
+ 
+    <div class="flipbook-viewport" id="viewport"> 
+      <div id="zoom-wrapper">
+        <div id="book-container"> 
+          <div id="book"></div> 
+        </div> 
+      </div>
+    </div> 
+ 
+    <div class="controls" id="controls" style="display: none;"> 
+      <button class="btn" id="prev-btn">◀ 上一頁</button> 
+      <span class="page-info" id="page-info">
+        <input type="number" class="page-input" id="page-input" min="1" max="280" value="1" title="輸入頁碼後按 Enter 跳轉" />
+        <span>/ <span id="total-pages">280</span></span>
+      </span> 
+      <button class="btn" id="next-btn">下一頁 ▶</button> 
+      
+      <div class="divider"></div>
+
+      <!-- 放大/縮小/重置按鈕 -->
+      <button class="btn" id="zoom-in-btn" title="放大內容">🔍 +</button>
+      <button class="btn" id="zoom-out-btn" title="縮小內容">🔍 -</button>
+      <button class="btn" id="zoom-reset-btn" title="重置大小">↺ 100%</button>
+
+      <div class="divider"></div>
+
+      <!-- 音效開關按鈕 -->
+      <button class="btn" id="sound-toggle-btn" title="切換音效">🔊</button>
+    </div> 
+ 
+    <script> 
+      // ==========================================
+      // 【GitHub 檔案設定區】請依實際上傳的檔案修改
+      // ==========================================
+      const GITHUB_CONFIG = {
+        bgUrl: "bg.png",          // 底圖檔名（若無底圖請留空 ""）
+        soundUrl: "flip.mp3",     // 翻頁音效檔名（若無音效檔會自動使用內建合成音效）
+        totalPages: 280,          // 電子書總頁數
+        filePrefix: "page_",      // 內頁檔名前綴（例如 page_001.jpg 的 "page_"）
+        fileExtension: ".jpg",    // 內頁副檔名（例如 ".jpg" 或 ".png"，注意大小寫）
+        digitCount: 3             // 編號位數（例如 001 為 3 位數；01 為 2 位數）
+      };
+      // ==========================================
+
+      let pageFlip = null; 
+      let rawPageUrls = []; 
+
+      // 圖片實際規格尺寸 (預設值)
+      let ORIGINAL_WIDTH = 3307;
+      let ORIGINAL_HEIGHT = 4677;
+
+      // 縮放與拖曳變數
+      let zoomLevel = 1;
+      const minZoom = 1;
+      const maxZoom = 2.8;
+      let posX = 0, posY = 0;
+      let isDragging = false;
+      let startX = 0, startY = 0;
+
+      // 音效控制變數
+      let customAudio = null;
+      let audioCtx = null;
+      let isSoundMuted = false;
+      const fallbackSoundStyle = 'heavy'; 
+
+      function initAudio() {
+        if (!audioCtx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) audioCtx = new AudioContext();
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      }
+
+      function playFlipSound() {
+        if (isSoundMuted) return;
+        initAudio();
+
+        if (customAudio) {
+          try {
+            const snd = customAudio.cloneNode(true);
+            snd.volume = 0.85;
+            const playPromise = snd.play();
+            if (playPromise !== undefined) {
+              playPromise.catch(e => console.warn("Audio play deferred:", e));
+            }
+          } catch (e) {
+            console.error("Custom audio play error:", e);
+            playSynthesizedSound(fallbackSoundStyle);
+          }
+        } else {
+          playSynthesizedSound(fallbackSoundStyle);
+        }
+      }
+
+      function playSynthesizedSound(style) {
+        if (!audioCtx) return;
+
+        try {
+          let duration = 0.28, frequency = 650, qValue = 0.8, filterType = 'lowpass', maxGain = 0.85;
+
+          if (style === 'crisp') {
+            duration = 0.18; frequency = 1200; qValue = 1.2; filterType = 'bandpass'; maxGain = 0.65;
+          } else if (style === 'smooth') {
+            duration = 0.22; frequency = 2200; qValue = 1.8; filterType = 'bandpass'; maxGain = 0.45;
+          } else if (style === 'woody') {
+            duration = 0.12; frequency = 900; qValue = 2.5; filterType = 'bandpass'; maxGain = 0.6;
+          }
+
+          const bufferSize = audioCtx.sampleRate * duration;
+          const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+          const data = buffer.getChannelData(0);
+
+          let b0 = 0, b1 = 0, b2 = 0, b3 = 0;
+          for (let i = 0; i < bufferSize; i++) {
+            const white = Math.random() * 2 - 1;
+            b0 = 0.99886 * b0 + white * 0.0555179;
+            b1 = 0.99332 * b1 + white * 0.0750759;
+            b2 = 0.96900 * b2 + white * 0.1538520;
+            b3 = 0.86650 * b3 + white * 0.3104856;
+            data[i] = (b0 + b1 + b2 + b3) * 0.12;
+          }
+
+          const noise = audioCtx.createBufferSource();
+          noise.buffer = buffer;
+
+          const filter = audioCtx.createBiquadFilter();
+          filter.type = filterType;
+          filter.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+          filter.Q.setValueAtTime(qValue, audioCtx.currentTime);
+
+          const gainNode = audioCtx.createGain();
+          gainNode.gain.setValueAtTime(0.001, audioCtx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(maxGain, audioCtx.currentTime + 0.03);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+          noise.connect(filter);
+          filter.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+
+          noise.start();
+        } catch (e) {
+          console.error("Audio synth error:", e);
+        }
+      }
+
+      window.addEventListener('click', initAudio, { once: true });
+      window.addEventListener('touchstart', initAudio, { once: true });
+
+      document.addEventListener('DOMContentLoaded', function() { 
+        const pages = [];
+        for (let i = 1; i <= GITHUB_CONFIG.totalPages; i++) {
+          const pageNum = String(i).padStart(GITHUB_CONFIG.digitCount, '0');
+          pages.push(`pages/${GITHUB_CONFIG.filePrefix}${pageNum}${GITHUB_CONFIG.fileExtension}`);
+        }
+
+        initFlipbook({
+          pages: pages,
+          bgUrl: GITHUB_CONFIG.bgUrl,
+          soundUrl: GITHUB_CONFIG.soundUrl
+        });
+      }); 
+
+      function initFlipbook(data) { 
+        if (!data || !data.pages || data.pages.length === 0) { 
+          document.getElementById('loading').innerText = '未設定內頁圖片，請確認 GITHUB_CONFIG 設定。'; 
+          return; 
+        } 
+
+        if (data.bgUrl) {
+          document.body.style.backgroundImage = `url('${data.bgUrl}')`;
+        }
+
+        if (data.soundUrl) {
+          customAudio = new Audio(data.soundUrl);
+          customAudio.preload = 'auto';
+          customAudio.onerror = () => { customAudio = null; };
+        }
+
+        rawPageUrls = data.pages;
+
+        // 預載入第一張圖片取得精確真實寬高
+        const tempImg = new Image();
+        tempImg.onload = function() {
+          if (this.naturalWidth && this.naturalHeight) {
+            ORIGINAL_WIDTH = this.naturalWidth;
+            ORIGINAL_HEIGHT = this.naturalHeight;
+          }
+          buildBookDOM();
+          setupZoomAndPan();
+          setupSoundControls();
+        };
+        tempImg.onerror = function() {
+          buildBookDOM();
+          setupZoomAndPan();
+          setupSoundControls();
+        };
+        tempImg.src = rawPageUrls[0];
+      }
+
+      // 動態根據可視畫面、控制列高度與圖片真實比例計算書頁尺寸。
+      // 橫向手機／平板會先預留底部按鈕空間，避免書頁超出上下邊界。
+      function calculateBookSize() {
+        const visualWidth = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+        const visualHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        const screenWidth = Math.round(visualWidth);
+        const screenHeight = Math.round(visualHeight);
+        const isMobile = screenWidth < 768;
+        const isShortLandscape = screenWidth > screenHeight && screenHeight <= 800;
+        const aspectRatio = ORIGINAL_HEIGHT / ORIGINAL_WIDTH;
+
+        const controls = document.getElementById('controls');
+        const controlsVisible = controls && getComputedStyle(controls).display !== 'none';
+        const controlsHeight = controlsVisible ? controls.getBoundingClientRect().height : 34;
+        const maxPageHeight = isShortLandscape
+          ? Math.max(140, Math.min(screenHeight * 0.74, screenHeight - controlsHeight - 22))
+          : screenHeight * 0.82;
+
+        if (isMobile) {
+          // 手機保持單頁並鎖定原始圖片比例；橫向時同樣依可用高度縮小。
+          const maxPageWidth = Math.min(screenWidth - 30, 420, maxPageHeight / aspectRatio);
+          const pageWidth = Math.max(120, maxPageWidth);
+          const pageHeight = pageWidth * aspectRatio;
+          return { width: Math.round(pageWidth), height: Math.round(pageHeight) };
+        } else {
+          // 桌機／橫向平板雙頁顯示；橫向觸控裝置會預留控制列空間。
+          let pageHeight = maxPageHeight;
+          let pageWidth = pageHeight / aspectRatio;
+
+          // 若雙頁總寬度超出可用螢幕寬度，則依寬度回算高度。
+          if (pageWidth * 2 > screenWidth - 80) {
+            pageWidth = (screenWidth - 80) / 2;
+            pageHeight = pageWidth * aspectRatio;
+          }
+
+          return { width: Math.round(pageWidth), height: Math.round(pageHeight) };
+        }
+      }
+
+      function buildBookDOM() {
+        const bookContainer = document.getElementById('book'); 
+        bookContainer.innerHTML = '';
+        
+        const orderedUrls = [...rawPageUrls];
+        const total = orderedUrls.length;
+
+        orderedUrls.forEach((url, index) => { 
+          const pageDiv = document.createElement('div');
+          pageDiv.className = 'page';
+
+          if (index === 0 || index === total - 1) {
+            pageDiv.setAttribute('data-density', 'hard');
+          }
+
+          const img = document.createElement('img'); 
+          img.className = 'page-img'; 
+          img.id = 'page-img-' + index;
+
+          if (index < 4 || index > total - 5) {
+            img.src = url;
+          }
+
+          pageDiv.appendChild(img);
+          bookContainer.appendChild(pageDiv); 
+        }); 
+
+        document.getElementById('loading').style.display = 'none'; 
+        document.getElementById('book-container').style.display = 'block'; 
+        document.getElementById('controls').style.display = window.innerWidth <= 480 ? 'grid' : 'flex'; 
+
+        const size = calculateBookSize();
+
+        pageFlip = new St.PageFlip(bookContainer, { 
+          width: size.width, 
+          height: size.height, 
+          size: 'fixed', 
+          showCover: true,                     // 開啟雙頁封面邏輯
+          usePortrait: window.innerWidth < 768, // 電腦版展示雙頁，手機自動轉單頁
+          direction: 'rtl',                    // 由右往左翻頁 (RTL)
+          maxShadowOpacity: 0.6,
+          flippingTime: 800,
+          startPage: 0                         // 從第 1 頁開始
+        }); 
+
+        pageFlip.loadFromHTML(document.querySelectorAll('.page')); 
+
+        const preloadAround = (pageIndex) => {
+          for (let i = pageIndex - 4; i <= pageIndex + 4; i++) {
+            if (i >= 0 && i < total) {
+              const img = document.getElementById('page-img-' + i);
+              if (img && !img.src) {
+                img.src = orderedUrls[i];
+              }
+            }
+          }
+        };
+
+        const pageInput = document.getElementById('page-input');
+        const totalPagesEl = document.getElementById('total-pages');
+        pageInput.max = total;
+        totalPagesEl.innerText = total;
+
+        const updatePageInfo = () => { 
+          const current = pageFlip.getCurrentPageIndex();
+          let displayPage = current + 1;
+          if (document.activeElement !== pageInput) {
+            pageInput.value = displayPage;
+          }
+          preloadAround(current);
+        }; 
+
+        const jumpToInputPage = () => {
+          let targetPage = parseInt(pageInput.value, 10);
+          if (isNaN(targetPage)) {
+            pageInput.value = pageFlip.getCurrentPageIndex() + 1;
+            return;
+          }
+          targetPage = Math.max(1, Math.min(total, targetPage));
+          pageInput.value = targetPage;
+          const targetIndex = targetPage - 1;
+          preloadAround(targetIndex);
+          initAudio();
+          pageFlip.turnToPage(targetIndex);
+        };
+
+        pageInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            jumpToInputPage();
+            pageInput.blur();
+          }
+        });
+
+        pageInput.addEventListener('change', jumpToInputPage);
+        pageInput.addEventListener('focus', () => pageInput.select());
+
+        pageFlip.on('changeState', (e) => {
+          if (e.data === 'flipping') {
+            playFlipSound();
+          }
+        });
+
+        pageFlip.on('flip', (e) => {
+          updatePageInfo();
+        });
+
+        document.getElementById('prev-btn').onclick = () => {
+          initAudio();
+          pageFlip.flipPrev();
+        };
+
+        document.getElementById('next-btn').onclick = () => {
+          initAudio();
+          pageFlip.flipNext();
+        };
+
+        // 鍵盤左右方向鍵翻頁：← 上一頁、→ 下一頁
+        // 在輸入文字或使用組合鍵時不攔截，避免影響其他操作。
+        if (!window.__flipbookKeyboardHandlerAdded) {
+          window.addEventListener('keydown', (e) => {
+            if (!pageFlip || e.repeat || e.altKey || e.ctrlKey || e.metaKey) return;
+
+            const target = e.target;
+            const tagName = target && target.tagName ? target.tagName.toUpperCase() : '';
+            if (target && target.isContentEditable) return;
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName)) return;
+
+            if (e.key === 'ArrowLeft') {
+              e.preventDefault();
+              initAudio();
+              pageFlip.flipPrev();
+            } else if (e.key === 'ArrowRight') {
+              e.preventDefault();
+              initAudio();
+              pageFlip.flipNext();
+            }
+          });
+          window.__flipbookKeyboardHandlerAdded = true;
+        }
+
+        updatePageInfo();
+
+        const refreshBookSize = () => {
+          if (pageFlip) {
+            const newSize = calculateBookSize();
+            pageFlip.update({ width: newSize.width, height: newSize.height });
+          }
+        };
+
+        window.addEventListener('resize', refreshBookSize);
+        window.addEventListener('orientationchange', () => {
+          // 等待瀏覽器完成旋轉後再重新計算可視高度。
+          window.setTimeout(refreshBookSize, 120);
+        });
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', refreshBookSize);
+        }
+      } 
+
+      function setupSoundControls() {
+        const soundBtn = document.getElementById('sound-toggle-btn');
+        soundBtn.onclick = () => {
+          isSoundMuted = !isSoundMuted;
+          soundBtn.innerText = isSoundMuted ? '🔇' : '🔊';
+        };
+      }
+
+      function setupZoomAndPan() {
+        const zoomWrapper = document.getElementById('zoom-wrapper');
+        const viewport = document.getElementById('viewport');
+        const zoomInBtn = document.getElementById('zoom-in-btn');
+        const zoomOutBtn = document.getElementById('zoom-out-btn');
+        const zoomResetBtn = document.getElementById('zoom-reset-btn');
+
+        // 觸控手勢狀態：pinch = 雙指縮放，pan = 放大後單指拖曳
+        let touchGesture = null;
+        let pinchStartDistance = 0;
+        let pinchStartZoom = 1;
+        let panStartX = 0;
+        let panStartY = 0;
+        let panStartPosX = 0;
+        let panStartPosY = 0;
+
+        function clampZoom(value) {
+          return Math.max(minZoom, Math.min(maxZoom, value));
+        }
+
+        function updateTransform() {
+          if (zoomLevel <= 1) {
+            zoomLevel = 1;
+            posX = 0;
+            posY = 0;
+          }
+          zoomWrapper.style.transform = `translate(${posX}px, ${posY}px) scale(${zoomLevel})`;
+        }
+
+        function getTouchDistance(touches) {
+          const dx = touches[0].clientX - touches[1].clientX;
+          const dy = touches[0].clientY - touches[1].clientY;
+          return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function getTouchMidpoint(touches) {
+          return {
+            x: (touches[0].clientX + touches[1].clientX) / 2,
+            y: (touches[0].clientY + touches[1].clientY) / 2
+          };
+        }
+
+        function zoomAroundPoint(newZoom, clientX, clientY) {
+          const oldZoom = zoomLevel;
+          newZoom = clampZoom(newZoom);
+          if (newZoom === oldZoom) return;
+
+          // 讓手指所在位置盡量維持在同一個內容位置，不只從中心放大
+          const rect = viewport.getBoundingClientRect();
+          const focusX = clientX - (rect.left + rect.width / 2);
+          const focusY = clientY - (rect.top + rect.height / 2);
+          posX = focusX - ((focusX - posX) / oldZoom) * newZoom;
+          posY = focusY - ((focusY - posY) / oldZoom) * newZoom;
+          zoomLevel = newZoom;
+          updateTransform();
+        }
+
+        zoomInBtn.onclick = () => {
+          initAudio();
+          zoomLevel = clampZoom(zoomLevel + 0.3);
+          updateTransform();
+        };
+
+        zoomOutBtn.onclick = () => {
+          initAudio();
+          zoomLevel = clampZoom(zoomLevel - 0.3);
+          updateTransform();
+        };
+
+        zoomResetBtn.onclick = () => {
+          zoomLevel = 1;
+          posX = 0;
+          posY = 0;
+          updateTransform();
+        };
+
+        // 電腦觸控板／滑鼠滾輪縮放
+        viewport.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const amount = e.deltaY < 0 ? 0.15 : -0.15;
+          zoomAroundPoint(zoomLevel + amount, e.clientX, e.clientY);
+        }, { passive: false });
+
+        // 電腦滑鼠：放大後可拖曳移動畫面
+        viewport.addEventListener('mousedown', (e) => {
+          if (zoomLevel > 1) {
+            isDragging = true;
+            startX = e.clientX - posX;
+            startY = e.clientY - posY;
+          }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+          if (isDragging && zoomLevel > 1) {
+            posX = e.clientX - startX;
+            posY = e.clientY - startY;
+            updateTransform();
+          }
+        });
+
+        window.addEventListener('mouseup', () => {
+          isDragging = false;
+        });
+
+        // 手機／平板雙指捏合：在 capture 階段攔截，避免被電子書誤判成翻頁
+        viewport.addEventListener('touchstart', (e) => {
+          if (e.touches.length >= 2) {
+            touchGesture = 'pinch';
+            pinchStartDistance = getTouchDistance(e.touches);
+            pinchStartZoom = zoomLevel;
+            e.preventDefault();
+            e.stopPropagation();
+          } else if (e.touches.length === 1 && zoomLevel > 1) {
+            // 放大後單指拖曳；縮放比例為 1 時，單指仍交給 PageFlip 翻頁
+            touchGesture = 'pan';
+            panStartX = e.touches[0].clientX;
+            panStartY = e.touches[0].clientY;
+            panStartPosX = posX;
+            panStartPosY = posY;
+            e.preventDefault();
+            e.stopPropagation();
+          } else {
+            touchGesture = null;
+          }
+        }, { passive: false, capture: true });
+
+        viewport.addEventListener('touchmove', (e) => {
+          if (e.touches.length >= 2) {
+            if (touchGesture !== 'pinch' || pinchStartDistance <= 0) {
+              touchGesture = 'pinch';
+              pinchStartDistance = getTouchDistance(e.touches);
+              pinchStartZoom = zoomLevel;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+
+            const currentDistance = getTouchDistance(e.touches);
+            const midpoint = getTouchMidpoint(e.touches);
+            const ratio = currentDistance / Math.max(1, pinchStartDistance);
+            zoomAroundPoint(pinchStartZoom * ratio, midpoint.x, midpoint.y);
+          } else if (touchGesture === 'pan' && e.touches.length === 1 && zoomLevel > 1) {
+            e.preventDefault();
+            e.stopPropagation();
+            posX = panStartPosX + (e.touches[0].clientX - panStartX);
+            posY = panStartPosY + (e.touches[0].clientY - panStartY);
+            updateTransform();
+          }
+        }, { passive: false, capture: true });
+
+        const finishTouchGesture = (e) => {
+          if (!e.touches || e.touches.length === 0) {
+            touchGesture = null;
+            pinchStartDistance = 0;
+          } else if (e.touches.length < 2 && touchGesture === 'pinch') {
+            touchGesture = null;
+            pinchStartDistance = 0;
+          }
+        };
+
+        viewport.addEventListener('touchend', finishTouchGesture, { passive: true, capture: true });
+        viewport.addEventListener('touchcancel', finishTouchGesture, { passive: true, capture: true });
+      }
+    </script> 
+  </body> 
+</html>
